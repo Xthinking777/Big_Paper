@@ -1,0 +1,121 @@
+load('D:\Users\xthinking\Documents\MATLAB\xxq_code25_1107Git\Big_Paper\Section_THREE\economic_aim\var data\Liu工业算例.mat');
+x=LQG_3D(:,3);%导入数据
+y=LQG_3D(:,2);
+
+
+% 使用polyfit函数进行拟合
+coefficients = polyfit(x, y, 3);
+% 输出拟合结果
+disp('拟合系数：');
+disp(coefficients);
+
+% 生成新的x轴上的点集
+new_x = linspace(min(x)*1, max(x), 100);
+% 根据拟合结果计算对应的y轴上的值
+new_y = polyval(coefficients, new_x);
+ 
+
+%求解优化问题
+%% 优化问题表达式
+%P=cy*y-cu*u
+%y=K*u
+%-lower_y+z_alpha_y*vay(y)<=y<=upper_y-z_alpha_y*vay(y)
+%-lower_u+z_alpha_u*vay(u)<=u<=upper_u-z_alpha_u*vay(u)
+%vay(y)=f(var(u))
+
+%初始化系数
+K=3.7;
+z_alpha_y=2;
+z_alpha_u=2;
+lower_y=490;
+upper_y=500;
+lower_u=132.4;%对应阀门30%
+upper_u=135.1;%对应阀门80%
+
+var_y0=11.17*0.1;% λ=0.3控制器(初始)*1.5对应方差
+var_u0=7.13*0.1;
+
+% var_y0=12.2252*0.1;% λ=0.3控制器*3对应方差
+% var_u0=16.4354*0.1;
+
+% var_y0=1.1407;% λ=0.7021控制器(最优)对应方差
+% var_u0=0.3136;
+
+%% 固定方差约束
+%f=@(x)-cy*x(1)+cu*x(2)+0*x(3)+0*x(4);% y u var(y) var(u)
+f=@(x)(100-((8.3*1e-3 + 3.1*1e-2*1.294)*(x(1) + 1.35*1e-4*x(1)^2)-1.1)-3)*-1;
+x0=[0 0 0 0];
+    %不等式约束
+   A = [ 1  0 z_alpha_y 0;
+        -1  0 z_alpha_y 0;
+         0  1 0         z_alpha_u;
+         0 -1 0         z_alpha_u];
+    b = [upper_y;
+         -lower_y;
+         upper_u;
+         -lower_u];
+     %等式约束
+    Aeq = [1 -K 0 0;
+           0  0      1 0
+           0  0      0 1];
+    beq = [0;
+            var_y0;
+            var_u0];
+    VLB = [ -100; -100; 0; 0];
+    VUB = [];
+    zyj0=fmincon(f, x0, A, b, Aeq, beq, VLB, VUB,'',optimoptions('fmincon', 'Display', 'off'));%最优解 固定方差约束
+%% 可变方差约束
+%f=@(x)-cy*x(1)+cu*x(2)+0*x(3)+0*x(4);% y u var(y) var(u)
+f=@(x)(100-((8.3*1e-3 + 3.1*1e-2*1.294)*(x(1) + 1.35*1e-4*x(1)^2)-1.1)-3)*-1;
+x0=[495 133 11 7];
+    %不等式约束
+   A = [ 1  0 z_alpha_y 0;
+        -1  0 z_alpha_y 0;
+         0  1 0         z_alpha_u;
+         0 -1 0         z_alpha_u];
+    b = [upper_y;
+         -lower_y;
+         upper_u;
+         -lower_u];
+     %等式约束
+    Aeq = [1 -K 0 0;
+           ];
+    beq = [0;
+            ];
+    VLB = [ -100; -100; 0; 0];
+    VUB = [];
+   %LGQ等式约束 
+   %x(3)=lqgxs(1)*x(4)^3+lqgxs(2)*x(4)^2+lqgxs(3)*x(4)+lqgxs(4)
+   %lqgxs = [-0.7319, 2.0170, -1.8912, 2.2011];
+   lqgxs =coefficients;
+   constraint_func = @(x) fitting_constraint(x, lqgxs);
+   zyj=fmincon(f, x0, A, b, Aeq, beq, VLB, VUB,constraint_func,optimoptions('fmincon', 'Display', 'off'));%最优解 LQG拟合曲线约束
+
+% 绘制原始数据点及拟合曲线
+figure;
+plot(x,y,'b<')
+%scatter(x, y, 'filled', 'MarkerFaceColor', 'b'); 
+hold on;
+plot(new_x, new_y, 'r-');
+% hold on;
+plot(zyj(4), zyj(3), 'k*','MarkerSize', 10);%最优经济参数
+plot(zyj0(4), zyj0(3), 'k.','MarkerSize', 20);%原最优经济参数
+legend('原始数据', '拟合曲线','最优控制器参数','初始控制器参数','LineWidth',1);
+title('LQG权衡曲线');
+xlabel('输入标准差','fontsize',15);
+ylabel('输出标准差','fontsize',15);
+grid on;
+
+P0=100-((8.3*1e-3 + 3.1*1e-2*1.294)*(zyj0(1) + 1.35*1e-4*zyj0(1)^2)-1.1)-3;
+fprintf("初始经济效益：");
+disp(P0);
+zyj0(2)=zyj0(2)/3.7;
+zyj0
+
+P=100-((8.3*1e-3 + 3.1*1e-2*1.294)*(zyj(1) + 1.35*1e-4*zyj(1)^2)-1.1)-3;
+fprintf("最优经济效益：");
+disp(P);
+zyj(2)=zyj(2)/3.7;
+zyj
+
+

@@ -1,0 +1,28 @@
+% kzq_fenzi=[0.7249 -1.207 0.5186]; %初始控制器
+% kzq_fenmu=[1 -1];
+% T_fenzi=[zeros(1,3) 0.6299];      %对象模型
+% T_fenmu=[1 -0.8899];
+% N_fenzi=[1 0];                 %扰动模型
+% N_fenmu=[1 -0.8899];
+% d=3;                              %时延
+%Lmd_Set=[0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 2 3 4 5  6 7];%Gao数值算例
+%Lmd_Set=[1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4];%Gao数值算例密集取值
+
+
+kzq_fenzi=[0.8541 -1.4616 0.6076]; %控制器 λ=0.3
+kzq_fenmu=[1 -1];
+T_fenzi=[zeros(1,6) 0.2155];      %对象模型
+T_fenmu=[1 -0.9418];
+N_fenzi=[1 4.821];                 %扰动模型
+N_fenmu=[1 -0.8899];
+d=6;                              %时延
+%Lmd_Set=[0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 2 3 4 5  6 7];%Liu工业算例
+Lmd_Set=[0.60 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.70];%Liu工业算例密集取值
+
+
+KZQ = filt(kzq_fenzi,kzq_fenmu); 
+T = filt(T_fenzi,T_fenmu);
+N = filt(N_fenzi,N_fenmu);
+G=N/(1+T*KZQ);
+LQG_3D=LQG_FPID(N,T,d,Lmd_Set);%高
+plot(LQG_3D(:,3),LQG_3D(:,2));
