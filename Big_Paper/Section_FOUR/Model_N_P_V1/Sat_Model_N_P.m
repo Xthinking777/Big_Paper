@@ -4,7 +4,7 @@ Data_Am=20000;%Amount of output data for close-loop system
 Data_G=1000;%Closed loop impulse response truncated data
 
 %% 选择模型
-model=3;
+model=4;
 if model==1%算例高鑫桐-----------------------------------------------------
     kzq_fenzi=[0.7249 -1.207 0.5186]; %控制器
     kzq_fenmu=[1 -1];
