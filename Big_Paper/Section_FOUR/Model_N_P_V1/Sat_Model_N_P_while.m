@@ -1,0 +1,137 @@
+%% 闭环系统辨识 - 多饱和度遍历分析程序
+clear; clc; close all;
+
+%% 1. 参数配置与模型选择
+Data_Am = 20000; % 仿真数据长度
+model = 1;       % 选择算例
+
+if model == 1
+    d = 5;
+    kzq_fenzi = [2.841 -4.406  1.749];
+    kzq_fenmu = [1 -1];
+    T_fenzi = [zeros(1,d) 0.2];
+    T_fenmu = [1 -0.8];
+    N_fenzi = [1 0];
+    N_fenmu = [1 -0.1 -0.2];
+    sat_alpha_set = [100 6.09 4.645 3.732]; % 饱和阈值集合%  2.5-50%  3.732-30%   4.645-20%   6.09-10%  10-0%
+    n_order = 2;
+    t_order = 1;
+elseif model == 2
+    d = 6;
+    kzq_fenzi = [0.8305 -1.396  0.607];
+    kzq_fenmu = [1 -1];
+    T_fenzi = [zeros(1,d) 1];
+    T_fenmu = [1 -0.8];
+    N_fenzi = [1 0.6];
+    N_fenmu = [1 0.1 -0.67 -0.025 0.105];
+    sat_alpha_set = [50 2.075 1.485 1.105];%  0.8-50%   1.05-40%   1.105-30%  1.485-20%  2.075-10%  5-0%
+    n_order = 5;
+    t_order = 1;
+elseif model == 3
+    d = 3;
+    kzq_fenzi = [6.533 -9.236  3.357];
+    kzq_fenmu = [1 -1];
+    T_fenzi = [zeros(1,d) 0.1];
+    T_fenmu = [1 -0.8];
+    N_fenzi = [1 0];
+    N_fenmu = [1 -0.5 ];
+    sat_alpha_set = [300 12.65 9.8 7.789];%7.789-30%  9.8-20%  12.65-10%  30-0%
+    n_order = 1;
+    t_order = 1;
+elseif model == 4
+    d = 3;
+    kzq_fenzi = [6.286 -8.814  3.163];
+    kzq_fenmu = [1 -1];
+    T_fenzi = [zeros(1,d) 0.1];
+    T_fenmu = [1 -0.8];
+    N_fenzi = [0.1 0];
+    N_fenmu = [1 -0.3 -0.1 ];
+    sat_alpha_set = [50 1.21 0.9455 0.777];%  0.777-30%  0.9455-20%  1.21-10%
+    n_order = 2;
+    t_order = 1;
+end
+
+% 构造传递函数对象
+KZQ = filt(kzq_fenzi, kzq_fenmu); 
+T_true = filt(T_fenzi, T_fenmu);
+N_true = filt(N_fenzi, N_fenmu);
+G_true = N_true / (1 + T_true * KZQ); % 无饱和时的理论闭环响应
+
+%% 2. 初始化绘图窗口
+t_plot = 0:49;
+colors = lines(length(sat_alpha_set));
+
+fig_G = figure('Name', 'G (闭环脉冲响应) 对比', 'Color', 'w'); hold on; grid on;
+fig_N = figure('Name', 'N (扰动模型) 对比', 'Color', 'w'); hold on; grid on;
+fig_T = figure('Name', 'T (被控对象) 对比', 'Color', 'w'); hold on; grid on;
+
+% 绘制无饱和理论基准线
+figure(fig_G);
+plot(t_plot, impulse(G_true, t_plot), 'k-', 'LineWidth', 2, 'DisplayName', '无饱和理论G');
+figure(fig_N);
+plot(t_plot, impulse(N_true, t_plot), 'k-', 'LineWidth', 2, 'DisplayName', '理论N');
+figure(fig_T);
+plot(t_plot, impulse(T_true, t_plot), 'k-', 'LineWidth', 2, 'DisplayName', '无饱和理论T');
+
+%% 3. 循环仿真与辨识
+for i = 1:length(sat_alpha_set)
+    sat_alpha = sat_alpha_set(i);
+    fprintf('正在运行仿真: 饱和阈值 alpha = %.2f\n', sat_alpha);
+    
+    % --- Simulink 仿真 ---
+    % 注意：模型 Sat_Nonliner_3 内部需引用变量 sat_alpha
+    sim('Sat_Nonliner_3'); 
+    
+    % --- 计算实际饱和度 ---
+    start_idx = 100;
+    eval_len = 1000;
+    actual_sat_num = sum(abs(u_k(start_idx : start_idx + eval_len)) > sat_alpha);
+    sat_percent = (actual_sat_num / (eval_len + 1)) * 100;
+    legend_info = sprintf('η(%.0f%%)', sat_percent);
+    
+    % --- FCOR 估计闭环响应 G ---
+    g_est_raw = fc(y_k(1:Data_Am)); 
+    g_est_vec = g_est_raw(1:length(t_plot));
+    
+    % --- 辨识 N ---
+    N_est = estimate_N_Sxt(d, g_est_raw(1:50), n_order);
+    n_est_vec = impulse(N_est, t_plot);
+    
+    % --- 辨识 T ---
+    G_sat_para = Tansfor(g_est_raw(1:70)', 0, 9, 50);
+    T_temp_tf = (N_est - G_sat_para) / (KZQ * G_sat_para);
+    
+    imp_T_temp = impulse(T_temp_tf);
+    imp_T_temp(1:d) = 0; % 补偿时延
+    if length(imp_T_temp) < 50
+        imp_T_temp(50) = 0; 
+    end
+    T_est = Tansfor(imp_T_temp(1:50), d, t_order, 15);
+    t_est_vec = impulse(T_est, t_plot);
+
+    % --- 绘图更新 ---
+    % 1. 绘制 G
+    figure(fig_G);
+    plot(t_plot, g_est_vec, '--o', 'Color', colors(i,:), 'MarkerSize', 3, 'DisplayName', ['估计G: ' legend_info]);
+    
+    % 2. 绘制 N
+    figure(fig_N);
+    plot(t_plot, n_est_vec, '--x', 'Color', colors(i,:), 'DisplayName', ['估计N: ' legend_info]);
+    
+    % 3. 绘制 T
+    figure(fig_T);
+    plot(t_plot, t_est_vec, '--s', 'Color', colors(i,:), 'MarkerSize', 3, 'DisplayName', ['参数化估计T: ' legend_info]);
+end
+
+%% 4. 图形后期修饰
+figure(fig_G);
+title(['闭环脉冲响应 G 对比 (Model ', num2str(model), ')']);
+xlabel('采样时间'); ylabel('幅值'); legend show;
+
+figure(fig_N);
+title(['扰动模型 N 脉冲响应对比 (Model ', num2str(model), ')']);
+xlabel('采样时间'); ylabel('幅值'); legend show;
+
+figure(fig_T);
+title(['对象模型 T 脉冲响应对比 (Model ', num2str(model), ')']);
+xlabel('采样时间'); ylabel('幅值'); legend show;
