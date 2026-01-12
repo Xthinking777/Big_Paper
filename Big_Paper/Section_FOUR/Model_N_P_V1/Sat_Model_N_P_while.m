@@ -58,20 +58,24 @@ N_true = filt(N_fenzi, N_fenmu);
 G_true = N_true / (1 + T_true * KZQ); % 无饱和时的理论闭环响应
 
 %% 2. 初始化绘图窗口
-t_plot = 0:49;
+t_plot = 1:50;
 colors = lines(length(sat_alpha_set));
+% 预定义不同的线型（确保数量匹配饱和度个数）
+line_styles = {'--', '-.', ':', '--', '-.', ':'}; 
 
-fig_G = figure('Name', 'G (闭环脉冲响应) 对比', 'Color', 'w'); hold on; grid on;
-fig_N = figure('Name', 'N (扰动模型) 对比', 'Color', 'w'); hold on; grid on;
-fig_T = figure('Name', 'T (被控对象) 对比', 'Color', 'w'); hold on; grid on;
+% 合并G和N到同一个窗口
+fig_GN = figure('Name', 'G (闭环脉冲响应) & N (扰动模型) 对比', 'Color', 'w'); hold on; 
+fig_T = figure('Name', 'T (被控对象) 对比', 'Color', 'w'); hold on; 
 
 % 绘制无饱和理论基准线
-figure(fig_G);
-plot(t_plot, impulse(G_true, t_plot), 'k-', 'LineWidth', 2, 'DisplayName', '无饱和理论G');
-figure(fig_N);
-plot(t_plot, impulse(N_true, t_plot), 'k-', 'LineWidth', 2, 'DisplayName', '理论N');
+figure(fig_GN);
+% 绘制N的理论基准线（黑色点划线）
+plot(t_plot, impulse(N_true, t_plot), 'r-', 'LineWidth', 1  ,'DisplayName', '理论N');
+% 绘制G的理论基准线（黑色实线）
+plot(t_plot, impulse(G_true, t_plot), 'k-', 'LineWidth', 1, 'DisplayName', '理论G');
+
 figure(fig_T);
-plot(t_plot, impulse(T_true, t_plot), 'k-', 'LineWidth', 2, 'DisplayName', '无饱和理论T');
+plot(t_plot, impulse(T_true, t_plot), 'k-', 'LineWidth', 1.5, 'DisplayName', '理论T');
 
 %% 3. 循环仿真与辨识
 for i = 1:length(sat_alpha_set)
@@ -87,7 +91,7 @@ for i = 1:length(sat_alpha_set)
     eval_len = 1000;
     actual_sat_num = sum(abs(u_k(start_idx : start_idx + eval_len)) > sat_alpha);
     sat_percent = (actual_sat_num / (eval_len + 1)) * 100;
-    legend_info = sprintf('η(%.0f%%)', sat_percent);
+    legend_info = sprintf('η=%.0f%%', sat_percent);
     
     % --- FCOR 估计闭环响应 G ---
     g_est_raw = fc(y_k(1:Data_Am)); 
@@ -110,28 +114,33 @@ for i = 1:length(sat_alpha_set)
     t_est_vec = impulse(T_est, t_plot);
 
     % --- 绘图更新 ---
-    % 1. 绘制 G
-    figure(fig_G);
-    plot(t_plot, g_est_vec, '--o', 'Color', colors(i,:), 'MarkerSize', 3, 'DisplayName', ['估计G: ' legend_info]);
+    % 1. 绘制G和N在同一个窗口，不同线型区分
+    figure(fig_GN);
+    % G曲线：使用指定颜色 + 对应线型 + 圆圈标记
+    plot(t_plot, g_est_vec, line_styles{i}, 'Color', colors(i,:), 'LineWidth', 1, ...
+         'DisplayName', ['估计G(' legend_info ')' ] );
+    % % N曲线：使用相同颜色 + 对应线型 + 叉号标记
+    % plot(t_plot, n_est_vec, line_styles{i}, 'Color', colors(i,:), 'Marker', 'x', 'MarkerSize', 3, ...
+    %      'DisplayName', ['估计N: ' legend_info]);
     
-    % 2. 绘制 N
-    figure(fig_N);
-    plot(t_plot, n_est_vec, '--x', 'Color', colors(i,:), 'DisplayName', ['估计N: ' legend_info]);
-    
-    % 3. 绘制 T
+    % 2. 绘制T
     figure(fig_T);
-    plot(t_plot, t_est_vec, '--s', 'Color', colors(i,:), 'MarkerSize', 3, 'DisplayName', ['参数化估计T: ' legend_info]);
+    plot(t_plot, t_est_vec, line_styles{i}, 'Color', colors(i,:),'LineWidth', 1, ...
+         'DisplayName', ['估计T(' legend_info ')']);
 end
 
 %% 4. 图形后期修饰
-figure(fig_G);
-title(['闭环脉冲响应 G 对比 (Model ', num2str(model), ')']);
-xlabel('采样时间'); ylabel('幅值'); legend show;
-
-figure(fig_N);
-title(['扰动模型 N 脉冲响应对比 (Model ', num2str(model), ')']);
-xlabel('采样时间'); ylabel('幅值'); legend show;
+figure(fig_GN);
+title(['G & N 脉冲响应对比 (Model ', num2str(model), ')']);
+xlabel('采样时间'); ylabel('幅值'); 
+legend show;
+% 调整图例位置，避免遮挡
+legend('Location', 'best');
 
 figure(fig_T);
 title(['对象模型 T 脉冲响应对比 (Model ', num2str(model), ')']);
-xlabel('采样时间'); ylabel('幅值'); legend show;
+xlabel('采样时间'); ylabel('幅值'); 
+legend show;
+legend('Location', 'best');
+
+

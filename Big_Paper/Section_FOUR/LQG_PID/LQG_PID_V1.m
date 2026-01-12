@@ -1,29 +1,68 @@
-% kzq_fenzi=[0.7249 -1.207 0.5186]; %初始控制器
-% kzq_fenmu=[1 -1];
-% T_fenzi=[zeros(1,3) 0.6299];      %对象模型
-% T_fenmu=[1 -0.8899];
-% N_fenzi=[1 0];                 %扰动模型
-% N_fenmu=[1 -0.8899];
-% d=3;                              %时延
-%Lmd_Set=[0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 2 3 4 5  6 7];%Gao数值算例
-%Lmd_Set=[1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4];%Gao数值算例密集取值
+%% LQG_FPID 多模型对比分析
+clear; clc; close all;
+
+% 初始化绘图窗口
+figure('Name', '多模型 LQG_PID 结果对比', 'Color', 'w');
+hold on; grid on; box on;
+xlabel('X 轴 (LQG_3D(:,3))');
+ylabel('Y 轴 (LQG_3D(:,2))');
+title('不同模型 LQG_PID 结果对比');
+
+% 定义颜色和线型（区分不同模型）
+colors = lines(4);          % 4种颜色
+line_styles = {'-', '--', '-.', ':'}; % 4种线型
+model_labels = {'模型1 (饱和度0%)', '模型2 (饱和度10%)', '模型3 (饱和度20%)', '模型4 (饱和度30%)'};
+
+% 遍历所有model_np (1-4)
+for model_np = 2:2
+    % 根据model_np配置参数
+    if model_np == 1
+        d = 5;  
+        T_fenzi = [zeros(1,d)  0.2];%对象模型 饱和度0%
+        T_fenmu = [1 -0.8];
+        N_fenzi = [1 0];                
+        N_fenmu = [1 -0.1  -0.2];
+        Lmd_Set = [0  0.5  1  5  15 50 100];
+    elseif model_np == 2
+        d = 5;  
+        T_fenzi = [zeros(1,d)  0.1787  -0.00376];%对象模型 饱和度10%
+        T_fenmu = [1 -0.8064];
+        N_fenzi = [1 0.02273];                
+        N_fenmu = [1 -0.1375  -0.2051 ];
+        Lmd_Set = [0  0.5  1  5  15 50 100];
+    elseif model_np == 3
+        d = 5;  
+        T_fenzi = [zeros(1,d)  0.1583 -0.003779];%对象模型 饱和度20%
+        T_fenmu = [1 -0.8063];
+        N_fenzi = [1 0.03523];                
+        N_fenmu = [1 -0.1583  -0.2084 ];
+        Lmd_Set = [0  0.5  1  5  15 50 100];
+    elseif model_np == 4
+        d = 5;  
+        T_fenzi = [zeros(1,d)  0.1392  -0.004026];%对象模型 饱和度30%
+        T_fenmu = [1 -0.8078];
+        N_fenzi = [1 0.04241];                
+        N_fenmu = [1 -0.1704  -0.2102 ];
+        Lmd_Set = [0  0.5  1  5  15 50 100];
+    end
+
+    % 构造传递函数
+    T = filt(T_fenzi, T_fenmu);
+    N = filt(N_fenzi, N_fenmu);
+
+    % 运行LQG_FPID并获取结果
+    fprintf('正在运行 model_np = %d ...\n', model_np);
+    LQG_3D = LQG_FPID(N, T, d, Lmd_Set);
+
+    % 绘制当前模型的结果（用不同颜色+线型区分）
+    plot(LQG_3D(:,3), LQG_3D(:,2), ...
+         'Color', colors(model_np,:), ...
+         'LineStyle', line_styles{model_np}, ...
+         'LineWidth', 1.5, ...
+         'DisplayName', model_labels{model_np});
+end
+
+% 图例设置（自动找最优位置）
+legend('Location', 'best', 'FontSize', 9);
 
 
-kzq_fenzi=[0.8541 -1.4616 0.6076]; %控制器 λ=0.3
-kzq_fenmu=[1 -1];
-T_fenzi=[zeros(1,6) 0.2155];      %对象模型
-T_fenmu=[1 -0.9418];
-N_fenzi=[1 4.821];                 %扰动模型
-N_fenmu=[1 -0.8899];
-d=6;                              %时延
-%Lmd_Set=[0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 2 3 4 5  6 7];%Liu工业算例
-%Lmd_Set=[0.60 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.70];%Liu工业算例密集取值
-Lmd_Set=[0.7021];
-
-KZQ = filt(kzq_fenzi,kzq_fenmu); 
-T = filt(T_fenzi,T_fenmu);
-N = filt(N_fenzi,N_fenmu);
-G=N/(1+T*KZQ);
-LQG_3D=LQG_FPID(N,T,d,Lmd_Set);%高
-figure;
-plot(LQG_3D(:,3),LQG_3D(:,2));
