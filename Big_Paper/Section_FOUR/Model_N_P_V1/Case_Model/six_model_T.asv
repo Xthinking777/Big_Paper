@@ -1,0 +1,100 @@
+% 6种被控对象：先去时延离散化，再添加离散纯时延（无Pade近似）
+clear; clc; close all;
+
+%% ====================== 1. 核心参数定义 ======================
+selected_idx = 1;  % 切换对象：1=FOLPD 2=Unstable FOLPD 3=IPD 4=FOLOPD 5=SOSPD 6=I2PD
+tau = 0.3;         % 纯时延时间（秒，统一设置，可按需调整）
+
+% 6种对象的核心参数（无时延）
+model_params = {
+    % 1. FOLPD（一阶滞后）
+    struct('name','FOLPD','Km',1.0,'Tm',1.0);
+    % 2. Unstable FOLPD（一阶不稳定）
+    struct('name','Unstable FOLPD','Km',2.0,'Tm',1.5);
+    % 3. IPD（积分+一阶滞后）
+    struct('name','IPD','Km',2.0,'Tm',1.5);
+    % 4. FOLOPD（一阶超前+一阶滞后）
+    struct('name','FOLOPD','Km',2.0,'Tm',1.5,'Tl',0.5);
+    % 5. SOSPD（二阶滞后）
+    struct('name','SOSPD','Km',2.0,'Tm1',1.0,'Tm2',2.0);
+    % 6. I2PD（二重积分+一阶滞后）
+    struct('name','I2PD','Km',2.0,'Tm',1.5)
+};
+T_delay=[3 3 3 6 6 6];
+% 离散化参数
+Ts = 0.1;                % 采样时间（秒）
+discrete_method = 'zoh'; % 无延迟对象的离散化方法（zoh/foh/tustin）
+s = tf('s');             % 连续复频率
+z = tf('z', Ts);         % 离散复频率（指定采样时间）
+
+%% ====================== 2. 加载参数+计算离散时延步数 ======================
+params = model_params{selected_idx};
+model_name = params.name;
+d = round(tau / Ts);     % 时延对应的离散步数（tau=0.3s, Ts=0.1s → d=3步）
+disp(['纯时延τ=', num2str(tau), 's → 离散步数d=', num2str(d), '步（Ts=', num2str(Ts), 's）']);
+
+%% ====================== 3. 步骤1：构建无延迟连续对象 → 离散化 ======================
+% 3.1 无延迟连续传递函数
+switch selected_idx
+    case 1  % FOLPD: Km/(1+Tm*s)
+        T_cont_no_delay = params.Km / (params.Tm*s + 1);
+    case 2  % Unstable FOLPD: Km/(1-Tm*s)
+        T_cont_no_delay = params.Km / (-params.Tm*s + 1);
+    case 3  % IPD: Km/(s*(1+Tm*s))
+        T_cont_no_delay = params.Km / (s*(params.Tm*s + 1));
+    case 4  % FOLOPD: Km*(1+Tl*s)/(1+Tm*s)
+        T_cont_no_delay = params.Km*(params.Tl*s + 1)/(params.Tm*s + 1);
+    case 5  % SOSPD: Km/((1+Tm1*s)*(1+Tm2*s))
+        T_cont_no_delay = params.Km / ((params.Tm1*s + 1)*(params.Tm2*s + 1));
+    case 6  % I2PD: Km/(s^2*(1+Tm*s))
+        T_cont_no_delay = params.Km / (s^2*(params.Tm*s + 1));
+end
+T_cont_no_delay = minreal(T_cont_no_delay);
+
+% 3.2 无延迟对象离散化（核心：先去时延离散化）
+T_disc_no_delay_raw = c2d(T_cont_no_delay, Ts, discrete_method);
+% 提取分子分母，重构SISO离散传递函数（避免维度异常）
+T_num_val = T_disc_no_delay_raw.Numerator{1};
+T_den_val = T_disc_no_delay_raw.Denominator{1};
+T_disc_no_delay = tf(T_num_val zer, T_den_val, Ts);
+
+%% ====================== 4. 步骤2：给离散对象添加纯时延 ======================
+% 离散纯时延传递函数：z^(-d)
+
+delay_disc = T_delay(selected_idx);  % MATLAB内置离散时延函数（物理意义：延迟d个采样步）
+% 含时延的离散传递函数：T_disc = T_disc_no_delay * z^(-d)
+T_disc_with_delay = T_disc_no_delay * (z^delay_disc);
+T_disc_with_delay = minreal(T_disc_with_delay); % 化简（无零极点对消，仅整理格式）
+
+%% ====================== 5. 输出结果（对比无延迟/含时延） ======================
+% disp('=================================================');
+% disp(['选中被控对象：', model_name]);
+% disp(['离散化方法：', discrete_method, ' | 采样时间：', num2str(Ts), 's']);
+% disp('-------------------------------------------------');
+% disp('1. 无延迟连续传递函数 T_cont_no_delay(s)：');
+% disp(T_cont_no_delay);
+% disp('-------------------------------------------------');
+% disp('2. 无延迟离散传递函数 T_disc_no_delay(z)：');
+% disp(T_disc_no_delay);
+% disp('-------------------------------------------------');
+% disp('3. 含纯时延的离散传递函数 T_disc_with_delay(z)（延迟', num2str(d), '步）：');
+% disp(T_disc_with_delay);
+% disp('=================================================');
+
+%% ====================== 6. 绘制脉冲响应（对比无延迟/含时延） ======================
+% figure('Color','w','Position',[100,100,800,600]);
+% % 子图1：无延迟离散脉冲响应
+% subplot(2,1,1);
+% impulse(T_disc_no_delay, 'b-', 'LineWidth',1.5);
+% grid on;
+% title([model_name, ' - 无延迟离散脉冲响应']);
+% xlabel('采样步数 (Ts=', num2str(Ts), 's)'); ylabel('幅值'); xlim([0, 50]);
+% 
+% % 子图2：含时延离散脉冲响应
+% subplot(2,1,2);
+% impulse(T_disc_with_delay, 'r--', 'LineWidth',1.5);
+% grid on;
+% title([model_name, ' - 含纯时延离散脉冲响应（延迟', num2str(d), '步）']);
+% xlabel('采样步数 (Ts=', num2str(Ts), 's)'); ylabel('幅值'); xlim([0, 50]);
+% 
+% sgtitle([model_name, ' 离散化：先去时延→再加时延（τ=', num2str(tau), 's）'],'FontSize',14);

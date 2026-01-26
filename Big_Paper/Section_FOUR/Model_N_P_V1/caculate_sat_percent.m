@@ -4,7 +4,7 @@ Data_Am=20000;%Amount of output data for close-loop system
 Data_G=1000;%Closed loop impulse response truncated data
 
 %% 选择模型
-model=4;
+model=5;
 if model==1%算例一澎湃--------------------------------------------------
     d = 5;
     kzq_fenzi=[2.841 -4.406  1.749];
@@ -49,6 +49,17 @@ if model==1%算例一澎湃--------------------------------------------------
     N_fenmu=[1 -0.3 -0.1 ];
     sat_alpha_set=1.21;%  0.777-30%  0.9455-20%  1.21-10%
     n_order=2;
+    t_order=1;
+ elseif model==5%高 算例一--------------------------------------------------
+    kzq_fenzi=[0.7249 -1.207 0.5186]; %控制器
+    kzq_fenmu=[1 -1];
+    d=3; 
+    T_fenzi=[zeros(1,d) 0.6299];      %对象模型
+    T_fenmu=[1 -0.8899];
+    N_fenzi=[1 0];                 %扰动模型
+    N_fenmu=[1 -0.8899];
+    sat_alpha_set=1;
+    n_order=1;
     t_order=1;
 end
 
