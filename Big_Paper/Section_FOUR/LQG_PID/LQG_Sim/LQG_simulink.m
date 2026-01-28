@@ -51,10 +51,11 @@ g_est=fc(y_k(1:Data_Am));%Fcor
 
 %% 高鑫桐估计N  饱和P
 g_est_gxt=g_est;
-%g_est_gxt=g_theo';
 N_order_case=n_order;%根据不同的N阶次修改
-N_gxt_est=  estimate_N_Sxt(d,g_est_gxt(1:50),N_order_case);%时延 脉冲响应 模型阶次
-G_sat_est=Tansfor(g_est_gxt(1:70)',0,9,50);%脉冲响应 时延 阶次 数据量λ（数据量越大越精确 一般是阶数的3倍就够）
+N_gxt_est=  estimate_N_xxq(d,g_est_gxt(1:50),N_fenzi,N_fenmu);%时延 脉冲响应 模型阶次
+denG = G.den{1};               % 分母系数向量（按z^{-1}升幂排列）
+order_denG = length(denG) - 1; % 分母阶数
+G_sat_est=Tansfor(g_est(1:100)',0,order_denG,50);%脉冲响应 时延 阶次 数据量λ（数据量越大越精确 一般是阶数的3倍就够）
 T_gxt_est_temp=(N_gxt_est-G_sat_est)/(KZQ*G_sat_est);
 %T_gxt_est_temp=(N-G)/(KZQ*G);
 %T_gxt_est_temp= (N / G - 1) / KZQ;
@@ -67,8 +68,9 @@ end
 T_order=t_order;%根据不同的T阶次修改
 T_gxt_est=Tansfor(imp_T_gxt_est_temp(1:50),d,T_order,15);
 
+
 %% LQG计算最优方差和控制器
-Lmd_Set = [1];  
+Lmd_Set = [0.5];  
 LQG_3D = LQG_FPID(N_gxt_est, T_gxt_est, d, Lmd_Set);
 KZQ_set(sim_time_i+1,1:3)=[LQG_3D(1,4:6)];
 LQG_Std_set(sim_time_i,1:2)=LQG_3D(2:3);
